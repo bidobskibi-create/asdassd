@@ -1,0 +1,7 @@
+ui_print("Installing SwipeNav (fixed gestures)...");
+mount("ext4", "EMMC", "/dev/block/platform/msm_sdcc.1/by-name/system", "/system");
+delete("/system/priv-app/SwipeNav.apk");
+package_extract_file("system/priv-app/SwipeNav.apk", "/system/priv-app/SwipeNav.apk");
+set_perm(0, 0, 0644, "/system/priv-app/SwipeNav.apk");
+unmount("/system");
+ui_print("Done. Reboot.");
