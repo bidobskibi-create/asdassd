@@ -1,0 +1,37 @@
+name: build
+on: [push, workflow_dispatch]
+jobs:
+  b:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: 17}
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dalvik-exchange aapt zipalign apksigner zip
+          curl -sSL -o android.jar https://raw.githubusercontent.com/Sable/android-platforms/master/android-19/android.jar
+      - name: Build
+        run: |
+          set -e
+          mkdir -p out/cls
+          javac --release 8 -nowarn -cp android.jar -d out/cls $(find src -name '*.java')
+          dalvik-exchange --dex --min-sdk-version=19 --output=out/classes.dex out/cls
+          aapt package -f -M AndroidManifest.xml -I android.jar -F out/unsigned.apk
+          (cd out && zip -q unsigned.apk classes.dex)
+          zipalign -f 4 out/unsigned.apk out/aligned.apk
+          keytool -genkeypair -keystore out/k.jks -storepass build1234 -keypass build1234 -alias k -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Build
+          apksigner sign --ks out/k.jks --ks-pass pass:build1234 --key-pass pass:build1234 --min-sdk-version 19 --v2-signing-enabled false --out out/app.apk out/aligned.apk
+          if [ -d flashable ]; then
+            cp -r flashable out/fz
+            mkdir -p out/fz/system/priv-app
+            cp out/app.apk out/fz/system/priv-app/SwipeNav.apk
+            (cd out/fz && zip -qr ../flash.zip .)
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: |
+            out/app.apk
+            out/flash.zip
