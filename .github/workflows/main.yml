@@ -7,6 +7,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: 17}
+      - name: Find project
+        run: |
+          M=$(find . -name AndroidManifest.xml -not -path './out/*' | head -1)
+          if [ -z "$M" ]; then echo "NO AndroidManifest.xml IN THE REPO - upload the project files first"; ls -R | head -40; exit 1; fi
+          echo "Project folder: $(dirname $M)"
+          echo "ROOT=$(dirname $M)" >> $GITHUB_ENV
+          ls -R "$(dirname $M)" | head -40
       - name: Install tools
         run: |
           sudo apt-get update -qq
@@ -15,10 +22,12 @@ jobs:
       - name: Build
         run: |
           set -e
+          J=$PWD/android.jar
+          cd "$ROOT"
           mkdir -p out/cls
-          javac --release 8 -nowarn -cp android.jar -d out/cls $(find src -name '*.java')
+          javac --release 8 -nowarn -cp $J -d out/cls $(find src -name '*.java')
           dalvik-exchange --dex --min-sdk-version=19 --output=out/classes.dex out/cls
-          aapt package -f -M AndroidManifest.xml -I android.jar -F out/unsigned.apk
+          aapt package -f -M AndroidManifest.xml -I $J -F out/unsigned.apk
           (cd out && zip -q unsigned.apk classes.dex)
           zipalign -f 4 out/unsigned.apk out/aligned.apk
           keytool -genkeypair -keystore out/k.jks -storepass build1234 -keypass build1234 -alias k -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Build
@@ -33,5 +42,5 @@ jobs:
         with:
           name: build
           path: |
-            out/app.apk
-            out/flash.zip
+            ${{ env.ROOT }}/out/app.apk
+            ${{ env.ROOT }}/out/flash.zip
